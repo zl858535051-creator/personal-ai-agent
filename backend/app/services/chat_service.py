@@ -31,7 +31,7 @@ class ChatService:
         messages.append({"role": "user", "content": request.message})
 
         self.db.add(ChatMessage(session_id=session.id, role="user", content=request.message))
-        answer = await LLMService().complete(messages)
+        answer = await LLMService().chat_completion(messages)
         self.db.add(
             ChatMessage(
                 session_id=session.id,
@@ -75,4 +75,3 @@ class ChatService:
             .all()
         )
         return list(reversed(messages))
-

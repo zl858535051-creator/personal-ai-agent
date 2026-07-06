@@ -17,6 +17,5 @@ class Executor:
             f"可用资料：\n{render_sources(sources)}\n\n"
             "输出要求：包含结论、关键依据、风险/影响、建议动作。"
         )
-        result = await LLMService().complete([{"role": "user", "content": prompt}])
+        result = await LLMService().chat_completion([{"role": "user", "content": prompt}])
         return result, steps
-
