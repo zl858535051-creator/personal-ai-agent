@@ -7,13 +7,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.models.document import Document, DocumentChunk
-from app.parsers.markdown_parser import MarkdownParser
-from app.parsers.pdf_parser import PDFParser
-from app.parsers.text_parser import TextParser
-from app.parsers.word_parser import WordParser
+from app.services.document_service import DocumentService, ProcessedChunk
 from app.services.embedding_service import EmbeddingService
 from app.utils.file_utils import SUPPORTED_EXTENSIONS, detect_file_type, safe_storage_name
-from app.utils.text_splitter import TextSplitter
 from app.vectorstore.chroma_store import ChromaVectorStore
 
 
@@ -44,11 +40,10 @@ class FileService:
         self.db.refresh(document)
 
         try:
-            text = self._parser_for(document.file_type).parse(path)
-            chunks = TextSplitter(settings.chunk_size, settings.chunk_overlap).split(text)
-            if not chunks:
+            processed = DocumentService().process_file(path, filename=document.filename)
+            if not processed.chunks:
                 raise AppError("No readable text was extracted from this file.")
-            self._index_chunks(document, chunks)
+            self._index_chunks(document, processed.chunks)
             document.status = "indexed"
             document.error_message = None
         except Exception as exc:
@@ -72,31 +67,30 @@ class FileService:
         self.db.delete(document)
         self.db.commit()
 
-    def _parser_for(self, file_type: str):
-        return {
-            "pdf": PDFParser(),
-            "word": WordParser(),
-            "markdown": MarkdownParser(),
-            "text": TextParser(),
-        }[file_type]
-
-    def _index_chunks(self, document: Document, chunks: list[str]) -> None:
+    def _index_chunks(self, document: Document, chunks: list[ProcessedChunk]) -> None:
         vector_ids: list[str] = []
         metadatas: list[dict] = []
-        for index, content in enumerate(chunks):
-            vector_id = f"doc-{document.id}-chunk-{index}"
-            chunk = DocumentChunk(
+        chunk_texts = [chunk.content for chunk in chunks]
+        for processed_chunk in chunks:
+            vector_id = f"doc-{document.id}-chunk-{processed_chunk.index}"
+            db_chunk = DocumentChunk(
                 document_id=document.id,
-                chunk_index=index,
-                content=content,
-                source_label=f"chunk {index + 1}",
+                chunk_index=processed_chunk.index,
+                content=processed_chunk.content,
+                source_label=processed_chunk.source_label,
                 vector_id=vector_id,
             )
-            self.db.add(chunk)
+            self.db.add(db_chunk)
             self.db.flush()
             vector_ids.append(vector_id)
-            metadatas.append({"document_id": document.id, "chunk_id": chunk.id, "chunk_index": index})
+            metadatas.append(
+                {
+                    "document_id": document.id,
+                    "chunk_id": db_chunk.id,
+                    "chunk_index": db_chunk.chunk_index,
+                    **processed_chunk.metadata,
+                }
+            )
 
-        embeddings = EmbeddingService().embed_texts(chunks)
+        embeddings = EmbeddingService().embed_texts(chunk_texts)
         ChromaVectorStore().add_texts(vector_ids, embeddings, metadatas)
-
