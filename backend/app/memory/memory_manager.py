@@ -48,6 +48,7 @@ class MemoryManager:
         steps: list[dict[str, Any]] | None = None,
         tool_results: list[dict[str, Any]] | None = None,
         final_result: str = "",
+        reflection_result: dict[str, Any] | None = None,
     ) -> TaskMemoryRecord:
         return self.task_memory.save_task(
             task_id=task_id,
@@ -56,6 +57,7 @@ class MemoryManager:
             steps=steps,
             tool_results=tool_results,
             final_result=final_result,
+            reflection_result=reflection_result,
         )
 
     def get_task(self, task_id: str) -> TaskMemoryRecord | None:

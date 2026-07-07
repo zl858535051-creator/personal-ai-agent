@@ -5,6 +5,7 @@ from app.agent.planner import Planner
 from app.agent.tools import AgentTools
 from app.memory import get_default_memory_manager
 from app.models.task import AgentTask
+from app.reflection import ReflectionManager
 from app.schemas.agent import AgentRunRequest, AgentRunResponse
 from app.schemas.report import ReportCreate
 from app.services.report_service import ReportService
@@ -16,6 +17,7 @@ class AgentService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.memory_manager = get_default_memory_manager()
+        self.reflection_manager = ReflectionManager()
 
     async def run(self, request: AgentRunRequest) -> AgentRunResponse:
         memory_context = self.memory_manager.get_context()
@@ -23,6 +25,13 @@ class AgentService:
         agent_tools = AgentTools(self.db)
         plan = await Planner(tool_registry=agent_tools.registry).plan(planner_task)
         result, steps, sources = await Executor(tool_registry=agent_tools.registry).execute(request.task, plan)
+        reflection_result = self.reflection_manager.reflect(
+            task=request.task,
+            plan=plan,
+            steps=steps,
+            sources=sources,
+            answer=result,
+        )
         task = AgentTask(user_input=request.task, task_type=plan.task_type, result=result)
         self.db.add(task)
         self.db.commit()
@@ -34,6 +43,7 @@ class AgentService:
             steps=[step.model_dump() for step in steps],
             tool_results=[source.model_dump() for source in sources],
             final_result=result,
+            reflection_result=reflection_result.to_dict(),
         )
         self.memory_manager.save_conversation(request.task, result)
 

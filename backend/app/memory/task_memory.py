@@ -18,6 +18,7 @@ class TaskMemoryRecord:
     steps: list[dict[str, Any]] = field(default_factory=list)
     tool_results: list[dict[str, Any]] = field(default_factory=list)
     final_result: str = ""
+    reflection_result: dict[str, Any] | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -29,6 +30,7 @@ class TaskMemoryRecord:
             "steps": self.steps,
             "tool_results": self.tool_results,
             "final_result": self.final_result,
+            "reflection_result": self.reflection_result,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -56,6 +58,7 @@ class TaskMemory(MemoryBase):
         steps: list[dict[str, Any]] | None = None,
         tool_results: list[dict[str, Any]] | None = None,
         final_result: str = "",
+        reflection_result: dict[str, Any] | None = None,
     ) -> TaskMemoryRecord:
         record = TaskMemoryRecord(
             task_id=task_id,
@@ -64,6 +67,7 @@ class TaskMemory(MemoryBase):
             steps=steps or [],
             tool_results=tool_results or [],
             final_result=final_result,
+            reflection_result=reflection_result,
         )
         self._tasks[task_id] = record
         logger.info("Saved task memory record: task_id=%s status=%s", task_id, status)
