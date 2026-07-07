@@ -16,9 +16,9 @@ class AgentService:
         self.db = db
 
     async def run(self, request: AgentRunRequest) -> AgentRunResponse:
-        plan = Planner().plan(request.task)
-        sources = await AgentTools(self.db).search_knowledge(request.task)
-        result, steps = await Executor().execute(request.task, plan, sources)
+        agent_tools = AgentTools(self.db)
+        plan = await Planner(tool_registry=agent_tools.registry).plan(request.task)
+        result, steps, sources = await Executor(tool_registry=agent_tools.registry).execute(request.task, plan)
         task = AgentTask(user_input=request.task, task_type=plan.task_type, result=result)
         self.db.add(task)
         self.db.commit()
