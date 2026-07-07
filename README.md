@@ -1,25 +1,94 @@
 # Personal AI Agent
 
-本项目是一个可本地运行的个人 AI Agent 智能助手，支持文件知识库、RAG 问答、多轮聊天、Agent 任务分析，以及 Markdown/PDF 报告生成。
+A local-first AI assistant with document knowledge base, RAG question answering, tool calling, planning, memory, reflection, self-correction, and report generation.
 
 ## Features
 
-- 上传并解析 PDF、Word、TXT、Markdown 文件
-- 自动文本切片并写入本地向量库
-- 基于知识库进行聊天问答并返回引用来源
-- 保存聊天会话和历史消息
-- Agent 自动识别任务类型，例如漏洞报告分析
-- 生成 Markdown 或 PDF 报告
-- Vue 3 工作台界面：聊天、文件、历史、报告
+- Document Parsing: PDF, DOCX, TXT, and Markdown ingestion
+- RAG Retrieval: chunking, embedding, vector search, and cited answers
+- Tool Calling: extensible `ToolRegistry` with pluggable Agent tools
+- LLM Planning: structured plans generated from available tools
+- Agent Execution: executes `PlanStep` tool calls and summarizes results
+- Conversation Memory: stores recent Agent conversation turns
+- Task Memory: records task state, tool results, retry count, and reflection history
+- Reflection Evaluation: evaluates answer quality and execution health
+- Self Correction Retry: bounded retry loop when reflection fails
+- Reports: Markdown and PDF report generation
+- Web UI: Vue 3 workspace for chat, uploads, history, and reports
+
+## Agent Architecture
+
+```mermaid
+flowchart TD
+    A["User Request"] --> B["MemoryManager<br/>(Conversation Memory + Task Memory)"]
+    B --> C["LLM Planner"]
+    C --> D["PlanStep"]
+    D --> E["Executor"]
+    E --> F["ToolRegistry"]
+    F --> G["Tools<br/>(RAG Tool)"]
+    G --> H["Knowledge Base / Vector Store"]
+    H --> E
+    E --> I["Reflection Manager"]
+    I --> J{"Self-Correction Loop"}
+    J -->|Success| K["Final Answer"]
+    J -->|Failure and retry budget remains| L["Retry Planner"]
+    L --> C
+    J -->|Failure and max retry reached| K
+    I --> B
+```
 
 ## Tech Stack
 
-- Backend: Python 3.11, FastAPI, SQLAlchemy, SQLite
-- Vector Store: ChromaDB with JSON fallback
+- Backend: Python 3.11+, FastAPI, SQLAlchemy, SQLite
 - AI: OpenAI-compatible chat API with local fallback
+- RAG: deterministic local embeddings, ChromaDB optional, JSON vector fallback
 - Documents: pypdf, python-docx
 - Reports: Markdown, reportlab PDF
 - Frontend: Vue 3, Vite, TypeScript, Axios
+
+## Project Structure
+
+```text
+backend/app
++-- api              FastAPI routes
++-- agent            planner, executor, tool registry, self-correction
++-- core             config, database, exceptions
++-- memory           conversation memory, task memory, memory manager
++-- models           SQLAlchemy models
++-- parsers          PDF, Word, Markdown, TXT parsers
++-- prompts          RAG prompt templates
++-- reflection       evaluator and reflection manager
++-- schemas          Pydantic request/response models
++-- services         business workflows
++-- utils            text splitting and citation helpers
+`-- vectorstore      Chroma adapter and JSON fallback store
+```
+
+## Core Workflows
+
+### Knowledge Base
+
+```text
+Upload document
+-> DocumentService parses and chunks text
+-> EmbeddingService creates vectors
+-> Vector store indexes chunks
+-> RAGService retrieves relevant sources
+-> LLMService generates cited answers
+```
+
+### Agent
+
+```text
+User task
+-> Memory context
+-> LLM Planner creates structured PlanSteps
+-> Executor calls tools through ToolRegistry
+-> Reflection evaluates the answer
+-> Self-Correction retries when needed
+-> Task and conversation memory are saved
+-> Final answer is returned
+```
 
 ## Quick Start
 
@@ -44,7 +113,11 @@ LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o-mini
 ```
 
-OpenAI-compatible providers such as DeepSeek, 通义千问, or 智谱 can be used by changing `LLM_BASE_URL` and `LLM_MODEL`.
+ChromaDB is optional. The app falls back to a local JSON vector store when ChromaDB is unavailable:
+
+```bash
+pip install -r requirements-vector.txt
+```
 
 ### Frontend
 
@@ -56,41 +129,11 @@ npm run dev
 
 Frontend URL: `http://localhost:5173`
 
-## Project Structure
-
-```text
-backend/app
-├── api          HTTP routes
-├── agent        planner, tools, executor
-├── core         config, database, exceptions
-├── models       SQLAlchemy models
-├── parsers      PDF, Word, Markdown, TXT parsers
-├── schemas      Pydantic request/response models
-├── services     business workflows
-├── utils        text splitting and citation helpers
-└── vectorstore  Chroma adapter and fallback store
-```
-
-## Core Workflows
-
-1. Upload file: save file, parse text, split chunks, embed text, index vectors.
-2. Chat: save message, retrieve relevant chunks, call LLM, return answer and sources.
-3. Agent: classify task, retrieve context, analyze with LLM, save structured result.
-4. Reports: write Markdown or render PDF, save report metadata.
-
 ## Tests
 
 ```bash
 cd personal-ai-agent/backend
-pytest
+python -m pytest
 ```
 
-## Roadmap
-
-- Add user authentication
-- Add streaming chat responses
-- Add richer document metadata and page-level citations
-- Add configurable embedding providers
-- Add background indexing jobs
-- Add Docker image builds for backend and frontend
-
+Current backend test suite covers document parsing, RAG, LLM service fallback, tool registry, planner, executor, memory, reflection, and self-correction.
