@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.agent.planner import Plan, PlanStep
+from app.agent.self_correction import SelfCorrectionResult
 from app.core.database import Base
 from app.memory import MemoryManager
 from app.models import task as task_models  # noqa: F401
@@ -77,19 +78,26 @@ def test_agent_service_saves_reflection_result(monkeypatch) -> None:
     db = SessionLocal()
     memory_manager = MemoryManager()
 
-    async def fake_plan(self, task):
-        return Plan("general_analysis", [PlanStep("knowledge_search", {"query": "资料"}, "Search")])
-
-    async def fake_execute(self, task, plan):
-        return (
-            "这是一个结构化且足够完整的回答，包含结论、依据和建议。",
-            [make_step()],
-            [make_source()],
+    async def fake_run(self, task, planner_task, tool_registry):
+        reflection_result = ReflectionManager().reflect(
+            task="总结资料",
+            plan=Plan("general_analysis", [PlanStep("knowledge_search", {"query": "资料"}, "Search")]),
+            steps=[make_step()],
+            sources=[make_source()],
+            answer="这是一个结构化且足够完整的回答，包含结论、依据和建议。",
+        )
+        return SelfCorrectionResult(
+            plan=Plan("general_analysis", [PlanStep("knowledge_search", {"query": "资料"}, "Search")]),
+            result="这是一个结构化且足够完整的回答，包含结论、依据和建议。",
+            steps=[make_step()],
+            sources=[make_source()],
+            reflection_result=reflection_result,
+            retry_count=0,
+            reflection_history=[reflection_result.to_dict()],
         )
 
     monkeypatch.setattr("app.services.agent_service.get_default_memory_manager", lambda: memory_manager)
-    monkeypatch.setattr("app.services.agent_service.Planner.plan", fake_plan)
-    monkeypatch.setattr("app.services.agent_service.Executor.execute", fake_execute)
+    monkeypatch.setattr("app.services.agent_service.SelfCorrectionManager.run", fake_run)
 
     response = asyncio.run(AgentService(db).run(AgentRunRequest(task="总结资料")))
     task_record = memory_manager.get_task(str(response.task_id))
@@ -98,4 +106,3 @@ def test_agent_service_saves_reflection_result(monkeypatch) -> None:
     assert task_record is not None
     assert task_record.reflection_result is not None
     assert task_record.reflection_result["success"] is True
-

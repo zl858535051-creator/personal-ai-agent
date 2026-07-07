@@ -49,6 +49,8 @@ class MemoryManager:
         tool_results: list[dict[str, Any]] | None = None,
         final_result: str = "",
         reflection_result: dict[str, Any] | None = None,
+        retry_count: int = 0,
+        reflection_history: list[dict[str, Any]] | None = None,
     ) -> TaskMemoryRecord:
         return self.task_memory.save_task(
             task_id=task_id,
@@ -58,6 +60,8 @@ class MemoryManager:
             tool_results=tool_results,
             final_result=final_result,
             reflection_result=reflection_result,
+            retry_count=retry_count,
+            reflection_history=reflection_history,
         )
 
     def get_task(self, task_id: str) -> TaskMemoryRecord | None:

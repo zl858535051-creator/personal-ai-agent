@@ -1,11 +1,9 @@
 from sqlalchemy.orm import Session
 
-from app.agent.executor import Executor
-from app.agent.planner import Planner
+from app.agent.self_correction import SelfCorrectionManager
 from app.agent.tools import AgentTools
 from app.memory import get_default_memory_manager
 from app.models.task import AgentTask
-from app.reflection import ReflectionManager
 from app.schemas.agent import AgentRunRequest, AgentRunResponse
 from app.schemas.report import ReportCreate
 from app.services.report_service import ReportService
@@ -17,21 +15,21 @@ class AgentService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.memory_manager = get_default_memory_manager()
-        self.reflection_manager = ReflectionManager()
+        self.self_correction_manager = SelfCorrectionManager()
 
     async def run(self, request: AgentRunRequest) -> AgentRunResponse:
         memory_context = self.memory_manager.get_context()
         planner_task = self._task_with_memory_context(request.task, memory_context.to_prompt_text())
         agent_tools = AgentTools(self.db)
-        plan = await Planner(tool_registry=agent_tools.registry).plan(planner_task)
-        result, steps, sources = await Executor(tool_registry=agent_tools.registry).execute(request.task, plan)
-        reflection_result = self.reflection_manager.reflect(
+        correction_result = await self.self_correction_manager.run(
             task=request.task,
-            plan=plan,
-            steps=steps,
-            sources=sources,
-            answer=result,
+            planner_task=planner_task,
+            tool_registry=agent_tools.registry,
         )
+        plan = correction_result.plan
+        result = correction_result.result
+        steps = correction_result.steps
+        sources = correction_result.sources
         task = AgentTask(user_input=request.task, task_type=plan.task_type, result=result)
         self.db.add(task)
         self.db.commit()
@@ -43,7 +41,9 @@ class AgentService:
             steps=[step.model_dump() for step in steps],
             tool_results=[source.model_dump() for source in sources],
             final_result=result,
-            reflection_result=reflection_result.to_dict(),
+            reflection_result=correction_result.reflection_result.to_dict(),
+            retry_count=correction_result.retry_count,
+            reflection_history=correction_result.reflection_history,
         )
         self.memory_manager.save_conversation(request.task, result)
 

@@ -19,6 +19,8 @@ class TaskMemoryRecord:
     tool_results: list[dict[str, Any]] = field(default_factory=list)
     final_result: str = ""
     reflection_result: dict[str, Any] | None = None
+    retry_count: int = 0
+    reflection_history: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -31,6 +33,8 @@ class TaskMemoryRecord:
             "tool_results": self.tool_results,
             "final_result": self.final_result,
             "reflection_result": self.reflection_result,
+            "retry_count": self.retry_count,
+            "reflection_history": self.reflection_history,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -59,6 +63,8 @@ class TaskMemory(MemoryBase):
         tool_results: list[dict[str, Any]] | None = None,
         final_result: str = "",
         reflection_result: dict[str, Any] | None = None,
+        retry_count: int = 0,
+        reflection_history: list[dict[str, Any]] | None = None,
     ) -> TaskMemoryRecord:
         record = TaskMemoryRecord(
             task_id=task_id,
@@ -68,6 +74,8 @@ class TaskMemory(MemoryBase):
             tool_results=tool_results or [],
             final_result=final_result,
             reflection_result=reflection_result,
+            retry_count=retry_count,
+            reflection_history=reflection_history or [],
         )
         self._tasks[task_id] = record
         logger.info("Saved task memory record: task_id=%s status=%s", task_id, status)
